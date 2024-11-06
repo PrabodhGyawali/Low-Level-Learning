@@ -149,6 +149,15 @@ consoleintr(int c)
     }
     break;
   case C('H'): // Backspace
+  case C('C'): // Kill current process
+    // Write implementation
+    if (myproc() != 0) {
+      setkilled(myproc());
+      consputc('^');
+      consputc('C');
+      consputc('\n');
+    }
+    break;
   case '\x7f': // Delete key
     if(cons.e != cons.w){
       cons.e--;
