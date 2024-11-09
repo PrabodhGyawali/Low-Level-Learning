@@ -34,7 +34,7 @@ void run_command(char* buf, int nbuf, int* pcp) {
   // char* file_name_l = 0;
   // char* file_name_r = 0;
 
-  // int p[2];
+  int p[2];
   int pipe_cmd = 0;
 
   int sequence_cmd = 0;
@@ -63,6 +63,10 @@ void run_command(char* buf, int nbuf, int* pcp) {
       buf[i] = '\0';
       ws = 1;
       we = 0;
+    }
+
+    if ((we == 1 && buf[i] == 124) || (numargs > 1 && buf[i] == 124)) {
+      printf("pipe_found\n");
     }
     
     if (!(redirection_left || redirection_right)) {
@@ -110,8 +114,12 @@ void run_command(char* buf, int nbuf, int* pcp) {
       fprintf(2, "-my_shell: cd: too many arguments\n");
       exit(0);
     }
+    if (numargs == 1) {
+      exit(0);
+    }
       
-    // Write the arguments to the pcp pipe
+    // Rule: Close before and after write
+    close(pcp[0]);
     write(pcp[1], arguments[1], strlen(arguments[1]));
     close(pcp[1]);
     exit(2);
@@ -166,14 +174,12 @@ int main(void) {
     pcp[1] : write fd
   */
   int pcp[2];
-  
 
   /* Read and run input commands. */
   printf(">>>");
   while(getcmd(buf, sizeof(buf)) >= 0) {
     pipe(pcp);
     if (fork() == 0) {
-      close(pcp[1]);
       run_command(buf, 100, pcp);
     }
 
@@ -193,19 +199,27 @@ int main(void) {
       exit(1);
     }
 
-    if (child_status == 2) {
-      static char path[100];
-      int read_rc = read(pcp[0], path, sizeof(path));
-      if (read_rc == 0) {
-        int chdir_rc = chdir(path);
-        if (chdir(path) < 0) 
-          fprintf(2, "-my_shell: cd: %s: No such file or directory\n", path);
-        printf("chdir status: %d\n", chdir_rc);
-        printf("changing to path: %s\n", path);
+    if (child_status == 2) {  
+      char path[100] = {0};
+
+      int read_rc = read(pcp[0], path, 100);
+      if (read_rc > 0) {
+        // printf("read_rc: %d\n", read_rc);
+        // printf("path={%s}\n", path);
+        int cd_rc = chdir(path);
+        // printf("cd return: %d\n", cd_rc);
+        if (cd_rc < 0) {
+          fprintf(2, "my_shell: cd: %s not found", path);
+        }
+        printf(">>>");
       }
-      close(pcp[0]);
-      printf("read_rc: %d\n", read_rc);
-      printf(">>>");
+      else if (read_rc == 0) {
+        fprintf(2, "my_shell: end of main pipe reached\n");
+        printf(">>>");
+      } else {
+        fprintf(2, "my_shell: main pipe read error\n");
+        printf(">>>");
+      }
     }
   }
   exit(0);
