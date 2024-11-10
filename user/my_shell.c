@@ -1,6 +1,7 @@
 #include "kernel/types.h"
 #include "user/user.h"
 #include "kernel/fcntl.h"
+#include "kernel/stat.h"
 
 int strin(char c, const char *str) {
   if (!str) {
@@ -31,9 +32,10 @@ int remove_last_argument(char** arguments, int* numargs) {
 
 
 /* Extra Marks
-  TODO: Fix `ls cannot stat` after 3 directory deep
-  TODO: Make sure there are no pipe leaks
   TODO: `exec failed:  grep     s`
+  TODO: Stress test `;`
+    - `echo hello | stressfs; cat < stressfs0
+  TODO: ls; echo hello > output; ls
 */
 
 /* Read a line of characters from stdin. */
@@ -55,6 +57,8 @@ int getcmd(char* buf, int nbuf) {
 */
 __attribute__((noreturn))
 void run_command(char* buf, int nbuf, int* pcp) {
+
+
   /* Useful data structures and flags. */
   char* arguments[10] = {0};
   int numargs = 0;
@@ -71,6 +75,7 @@ void run_command(char* buf, int nbuf, int* pcp) {
   int p[2];
   int pipe_cmd = 0;
   int sequence_cmd = 0;
+  char* sequence_pointer = 0;
   
   int i = 0;
   /* Parse the command character by character. */
@@ -81,6 +86,26 @@ void run_command(char* buf, int nbuf, int* pcp) {
       buf[i] = '\0'; // tokenize last argument
       break;
     } // Save CPU cycles
+
+    if (buf[i] == ';') {
+      sequence_cmd = 1;
+      if (we) {
+        buf[i] = '\0';
+        we = 0;
+        ws = 1;
+      }
+
+      int j = i + 1;
+      while(j < nbuf && strin(buf[j], " \t") == 1) {
+        j++;
+      }
+      if (j >= nbuf || strin(buf[j], "\0\n") == 1) {
+        fprintf(2, "my_shell: missing command after ;\n");
+        exit(1);
+      }
+      sequence_pointer = &buf[j];
+      break;
+    }
 
     if (buf[i] == '|') {
       pipe_cmd = 1;
@@ -131,7 +156,7 @@ void run_command(char* buf, int nbuf, int* pcp) {
 
         run_command(&buf[j], nbuf - j, pcp);
       }
-      exit(0);
+      exit(1);
     }
     /* Start a word */
     if (ws && strin(buf[i], " \t>|<") == 0) {
@@ -201,6 +226,7 @@ void run_command(char* buf, int nbuf, int* pcp) {
         }
         file_name_l = &buf[j];
         // printf("file_name_l: %s", file_name_l);
+        
       } else if (redirection_right && file_name_r == 0) {
         int j = i;
         while (strin(buf[j], " \t><|;\n") == 1)
@@ -212,7 +238,13 @@ void run_command(char* buf, int nbuf, int* pcp) {
           j++;
         }
         file_name_r = &buf[j];
-        // printf("file_name_r: %s\n", file_name_r);
+        printf("file_name_r: %s\n", file_name_r);
+        // Make sure file name ends
+        while (strin(buf[j], ""))
+        {
+          /* code */
+        }
+        
       } else {
         if (buf[i] == ' ' || buf[i] == '\n') {
           buf[i] = '\0';
@@ -228,10 +260,39 @@ void run_command(char* buf, int nbuf, int* pcp) {
   */
   if (sequence_cmd) {
     sequence_cmd = 0;
-    if (fork() != 0) {
+    // check for cd
+    if (strcmp(arguments[0], "cd") == 0) {
+        if (numargs > 2) {
+            fprintf(2, "-my_shell: cd: too many arguments\n");
+            exit(0);
+        }
+        if (numargs == 1) {
+            exit(0);
+        }
+        
+        // Write CD argument to parent pipe
+        close(pcp[0]);
+        write(pcp[1], arguments[1], strlen(arguments[1]));
+        close(pcp[1]);
+        
+        // Now run the next command in sequence
+        wait(0); // Wait for CD to complete
+        run_command(sequence_pointer, nbuf - (sequence_pointer - buf), pcp);
+        exit(2); // Exit with CD status for sequence_cmd
+
+    }
+
+    int pid = fork();
+    if (pid < 0) {
+      fprintf(2, "my_shell: fork failed\n");
+      exit(1);
+    } else if (pid == 0) {
+      exec(arguments[0], arguments);
+      fprintf(2, "exec failed: %s\n", arguments[0]);
+      exit(1);
+    } else {
       wait(0);
-      // ##### Place your code here.
-      // What do do with values after ';'???
+      run_command(sequence_pointer, nbuf - (sequence_pointer - buf), pcp);
     }
   }
 
@@ -247,7 +308,6 @@ void run_command(char* buf, int nbuf, int* pcp) {
     if (numargs == 1) {
       exit(0);
     }
-      
     // Rule: Close before and after write
     close(pcp[0]);
     write(pcp[1], arguments[1], strlen(arguments[1]));
@@ -255,34 +315,13 @@ void run_command(char* buf, int nbuf, int* pcp) {
     exit(2);
   } else if (strcmp(arguments[0], "exit") == 0) {
     exit(3);
-  } else if (strcmp(arguments[0], "clear") == 0) {
-    // manipulate console
-  }
+  } 
   else {
     /*
       Pipe command: fork twice. Execute the left hand side directly.
       Call run_command recursion for the right side of the pipe.
     */
-    if (!pipe_cmd) {
-      /* Parsing done. Execute the command. */
-      int pid = fork();
-      if (pid > 0) {
-        close(pcp[0]);
-        close(pcp[1]);
-        pid = wait((int*)0);
-      } else if (pid == 0) {
-        close(pcp[0]);
-        close(pcp[1]);
-        exec(arguments[0], arguments);
-        fprintf(2, "exec failed: %s\n", arguments[0]);
-        exit(0);
-      } else {
-        fprintf(2, "my_shell: run_command internal fork error\n");
-      } 
-      
-    } else {
-      // ##### Place your code here.
-    }
+    
   }
 
   /*
@@ -307,7 +346,7 @@ void run_command(char* buf, int nbuf, int* pcp) {
     remove_last_argument(arguments, &numargs);
     exec(arguments[0], arguments);
     fprintf(2, "exec failed: %s\n", arguments[0]);
-    exit(1);  // TODO: TEST
+    exit(1);
   }
   if (redirection_right) {
     int redir_fd = open(file_name_r, O_CREATE | O_TRUNC | O_WRONLY);
@@ -323,9 +362,27 @@ void run_command(char* buf, int nbuf, int* pcp) {
     remove_last_argument(arguments, &numargs);
     exec(arguments[0], arguments);
     fprintf(2, "exec failed %s\n", arguments[0]);
-    exit(1);  // TODO: TEST
+    exit(1);
   }
   
+  /* Parsing done. Execute the command. */
+  if (!pipe_cmd) {
+    int pid = fork();
+    if (pid > 0) {
+      close(pcp[0]);
+      close(pcp[1]);
+      pid = wait((int*)0);
+    } else if (pid == 0) {
+      close(pcp[0]);
+      close(pcp[1]);
+      if (redirection_left || redirection_right) {}
+      exec(arguments[0], arguments);
+      fprintf(2, "exec failed: %s\n", arguments[0]);
+      exit(0);
+    } else {
+      fprintf(2, "my_shell: run_command internal fork error\n");
+    } 
+  }
 
   /* Testing */
   // printf("\nNum of args: %d\n", numargs);
@@ -357,7 +414,7 @@ int main(void) {
     }
 
     if (fork() == 0) {
-      close(pcp[0]);    // Test
+      close(pcp[0]);
       run_command(buf, 100, pcp);
     }
 
@@ -385,7 +442,7 @@ int main(void) {
         int cd_rc = chdir(path);
         // printf("cd return: %d\n", cd_rc);
         if (cd_rc < 0) {
-          fprintf(2, "my_shell: cd: %s not found", path);
+          fprintf(2, "my_shell: cd: %s not found\n", path);
         }
       }
       else if (read_rc == 0) {
@@ -395,6 +452,12 @@ int main(void) {
       }
     }
     close(pcp[0]);
+
+    // Monitor Process table for link to make sure all pipe processes are completed
+    // struct stat st;
+    // while (fstat(1, &st) == 0 && st.nlink > 0) {
+    //   sleep(1);
+    // }
   }
   exit(0);
 }
