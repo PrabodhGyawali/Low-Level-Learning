@@ -141,6 +141,7 @@ UPROGS=\
 	$U/_zombie\
   	$U/_sleep\
 	$U/_my_shell\
+	$U/_old_shell\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
