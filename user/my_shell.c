@@ -3,6 +3,7 @@
 #include "kernel/fcntl.h"
 #include "kernel/stat.h"
 
+
 int strin(char c, const char *str) {
   if (!str) {
     return 0;
@@ -36,11 +37,12 @@ int remove_last_argument(char** arguments, int* numargs) {
   TODO: Stress test `;`
     - `echo hello | stressfs; cat < stressfs0
   TODO: ls; echo hello > output; ls
+  TODO: cat < input.txt > output.txt
 */
 
 /* Read a line of characters from stdin. */
 int getcmd(char* buf, int nbuf) {
-  printf(">>>");
+  printf(">>> ");
   memset(buf, 0, nbuf);
   int rc = read(0, buf, nbuf);
   if (rc < 0) {
@@ -57,8 +59,11 @@ int getcmd(char* buf, int nbuf) {
 */
 __attribute__((noreturn))
 void run_command(char* buf, int nbuf, int* pcp) {
-
-
+  /* my structures 
+      - [0]: file_name_l
+      - [1]: file_name_r
+   */
+  // char* static_values[2] = {0};
   /* Useful data structures and flags. */
   char* arguments[10] = {0};
   int numargs = 0;
@@ -238,13 +243,8 @@ void run_command(char* buf, int nbuf, int* pcp) {
           j++;
         }
         file_name_r = &buf[j];
-        printf("file_name_r: %s\n", file_name_r);
-        // Make sure file name ends
-        while (strin(buf[j], ""))
-        {
-          /* code */
-        }
-        
+        // Fix errors with: `ls; echo hello > output; ls`, where file_name_r = `output; ls`
+        printf("file_name_r: %s\n", file_name_r);        
       } else {
         if (buf[i] == ' ' || buf[i] == '\n') {
           buf[i] = '\0';
@@ -260,38 +260,19 @@ void run_command(char* buf, int nbuf, int* pcp) {
   */
   if (sequence_cmd) {
     sequence_cmd = 0;
-    // check for cd
-    if (strcmp(arguments[0], "cd") == 0) {
-        if (numargs > 2) {
-            fprintf(2, "-my_shell: cd: too many arguments\n");
-            exit(0);
-        }
-        if (numargs == 1) {
-            exit(0);
-        }
-        
-        // Write CD argument to parent pipe
-        close(pcp[0]);
-        write(pcp[1], arguments[1], strlen(arguments[1]));
-        close(pcp[1]);
-        
-        // Now run the next command in sequence
-        wait(0); // Wait for CD to complete
-        run_command(sequence_pointer, nbuf - (sequence_pointer - buf), pcp);
-        exit(2); // Exit with CD status for sequence_cmd
-
-    }
+    // TODO: Add cd
 
     int pid = fork();
     if (pid < 0) {
       fprintf(2, "my_shell: fork failed\n");
       exit(1);
     } else if (pid == 0) {
-      exec(arguments[0], arguments);
-      fprintf(2, "exec failed: %s\n", arguments[0]);
-      exit(1);
+      /* child cat  */
+      run_command(buf, nbuf, pcp);
     } else {
       wait(0);
+      // printf("sequence returned\n");
+      // printf("running: {%s}", sequence_pointer);
       run_command(sequence_pointer, nbuf - (sequence_pointer - buf), pcp);
     }
   }
@@ -385,11 +366,11 @@ void run_command(char* buf, int nbuf, int* pcp) {
   }
 
   /* Testing */
-  // printf("\nNum of args: %d\n", numargs);
-  // for (int i = 0; i < numargs; i++)
-  // {
-  //   printf("arguments[%d]: %s\n", i, arguments[i]);
-  // }
+  printf("\nNum of args: %d\n", numargs);
+  for (int i = 0; i < numargs; i++)
+  {
+    printf("arguments[%d]: %s\n", i, arguments[i]);
+  }
   // printf("redir_l: %d\n", redirection_left);
   // printf("redir_r: %d\n", redirection_right);
   // printf("file_l: %s\n", file_name_l);
