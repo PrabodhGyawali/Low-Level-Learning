@@ -32,7 +32,7 @@ int remove_last_argument(char** arguments, int* numargs) {
 }
 
 
-/* Extra Marks
+/* Test Cases
   TODO: `exec failed:  grep     s`
   TODO: Stress test `;`
     - `echo hello | stressfs; cat < stressfs0
@@ -76,6 +76,9 @@ void run_command(char* buf, int nbuf, int* pcp) {
   int redirection_right = 0;
   char* file_name_l = 0;
   char* file_name_r = 0;
+  /* Remove position of file_name from arguments array */
+  int file_name_l_pos = -1; 
+  int file_name_r_pos = -1;
 
   int p[2];
   int pipe_cmd = 0;
@@ -124,7 +127,227 @@ void run_command(char* buf, int nbuf, int* pcp) {
         fprintf(2, "my_shell: pipe creation failed\n");
         exit(1);
       }
+      break;
+    }
+    /* Start a word */
+    if (ws && strin(buf[i], " \t>|<;") == 0) {
+      numargs++;
+      if (file_name_r_pos == numargs || file_name_l_pos == numargs) {
+        // decrement numargs
+        numargs--;
+      } else {
+        // save next arg to arg list
+        arguments[numargs - 1] = &buf[i];
+      }
+      
+      we = 1;
+      ws = 0;
+    } 
 
+    /* End a word */
+    if (we == 1 && buf[i] == 32 && buf[i] != 60 && buf[i] != 62) {
+      buf[i] = '\0';
+      ws = 1;
+      we = 0;
+    }
+
+    /* Redirection left */
+    if (buf[i] == '<') {
+        redirection_left = 1;
+        if (we) {
+          buf[i] = '\0';
+          we = 0;
+          ws = 1;
+        } 
+        if (numargs == 0)  {
+          fprintf(2, "my_shell: missing file for redirection\n");
+          exit(0);
+        }
+        continue;
+    }
+    /* Redirection right */
+    if (buf[i] == '>') {
+      redirection_right = 1;
+      if (we) {
+        buf[i] = '\0'; 
+        we = 0;
+        ws = 1;
+      }
+      
+      if (numargs == 0)  {
+        fprintf(2, "my_shell: missing file for redirection\n");
+        exit(0);
+      }
+      continue;
+    }
+
+    // TODO: Fix errors with: `ls; echo hello > output; ls`, where file_name_r = `output; ls`
+    if (!(redirection_left || redirection_right)) {
+      /* No redirection, continue parsing command. */
+      
+      // Place your code here
+    } 
+    else {
+      /* Redirection command. Capture the file names. */
+      /* TODO: Figure out a way to remove file_name_l and file_name_r from arguments */
+      if (redirection_left && file_name_l == 0) {
+        int j = i+1;
+        while (strin(buf[j], " \t><|;\n") == 1)
+        {
+          if (strin(buf[j], "><|;\n") == 1) {
+            fprintf(2, "my_shell: invalid use of redirection token\n");
+            exit(1);
+          }
+          j++;
+        }
+
+        file_name_l = &buf[j];
+        if (we) {
+          file_name_r_pos = numargs - 1;
+        }
+        file_name_r_pos = numargs + 1;
+        
+      } else if (redirection_right && file_name_r == 0) {
+        int j = i;
+        while (strin(buf[j], " \t><|;\n") == 1)
+        {
+          if (strin(buf[j], "><|;\n") == 1) {
+            fprintf(2, "my_shell: invalid use of redirection token\n");
+            exit(1);
+          }
+          j++;
+        }
+        file_name_r = &buf[j];
+        if (we) {
+          file_name_r_pos = numargs - 1;
+        }
+        file_name_r_pos = numargs + 1;
+      } else {
+        if (buf[i] == ' ' || buf[i] == '\n') {
+          buf[i] = '\0';
+        }
+      }
+    }
+  }
+
+  /* Testing */
+  printf("\n\nNum of args: %d\n", numargs);
+  for (int i = 0; i < numargs; i++)
+  {
+    printf("arguments[%d]: %s\n", i, arguments[i]);
+  }
+  printf("flags: pipe_cmd=%d, sequence_cmd=%d, numargs=%d, ws=%d, we=%d\n", pipe_cmd, sequence_cmd, numargs, ws, we);
+  printf("redir_l: %d\n", redirection_left);
+  printf("redir_r: %d\n", redirection_right);
+  printf("file_l: %s\n", file_name_l);
+  printf("file_r: %s\n", file_name_r);
+  printf("file_l_pos: %d\n", file_name_l_pos);
+  printf("file_r_pos: %d\n\n\n", file_name_r_pos);
+  /*
+    Sequence command. Continue this command in a new process.
+    Wait for it to complete and execute the command following ';'.
+  */
+  if (sequence_cmd) {
+    sequence_cmd = 0;
+    // TODO: Add cd
+
+    int pid = fork();
+    if (pid < 0) {
+      fprintf(2, "my_shell: fork failed\n");
+      exit(1);
+    } else if (pid == 0) {
+      if (redirection_right) {
+        int redir_fd = open(file_name_r, O_CREATE | O_TRUNC | O_WRONLY);
+        if(redir_fd < 0) {
+          fprintf(2, "my_shell: cannot open %s\n", file_name_r);
+          exit(1);
+        }
+        close(1);
+        dup(redir_fd);
+        close(redir_fd);
+      }
+      if (redirection_left) {
+        int redir_fd = open(file_name_l, O_WRONLY);
+        if (redir_fd < 0) {
+          fprintf(2, "my_shell: cannot open %s\n", file_name_l);
+          exit(1);
+        }
+        close(0);
+        dup(redir_fd);
+        close(redir_fd);
+      }
+      exec(arguments[0], arguments);
+      exit(1);
+    } else {
+      wait(0);
+      printf("sequence returned, running: {%s}\n", sequence_pointer);
+      run_command(sequence_pointer, nbuf - (sequence_pointer - buf), pcp);
+    }
+  }
+
+
+  /*
+    If this is a redirection command,
+    tie the specified files to std in/out.
+  */
+  if (redirection_left) {
+    int redir_fd = open(file_name_l, O_RDONLY);
+    if (redir_fd < 0) {
+        fprintf(2, "my_shell: cannot open %s\n", file_name_l);
+        exit(1);
+    }
+    close(0);
+    if (dup(redir_fd) < 0) {
+      fprintf(2, "redirection dup error\n");
+      close(redir_fd);
+      exit(1);
+    }
+    close(redir_fd);
+    exec(arguments[0], arguments);
+    fprintf(2, "exec failed: %s\n", arguments[0]);
+    exit(1);
+  }
+  if (redirection_right) {
+    int redir_fd = open(file_name_r, O_CREATE | O_TRUNC | O_WRONLY);
+    if(redir_fd < 0) {
+        fprintf(2, "my_shell: cannot open %s\n", file_name_r);
+        exit(1);
+    }
+    close(1);
+    dup(redir_fd);
+    close(redir_fd);
+    exec(arguments[0], arguments);
+    fprintf(2, "exec failed %s\n", arguments[0]);
+    exit(1);
+  }
+  /* Parsing done. Execute the command. */
+  
+  /* If this command is a CD command, write the arguments to the pcp pipe 
+   * and exit with '2' to tell the parent process about this. */
+  if (strcmp(arguments[0], "cd") == 0) {
+    // ##### Place your code here.
+    if (numargs > 2) {
+      fprintf(2, "-my_shell: cd: too many arguments\n");
+      exit(0);
+    }
+    if (numargs == 1) {
+      exit(0);
+    }
+    // Rule: Close before and after write
+    close(pcp[0]);
+    write(pcp[1], arguments[1], strlen(arguments[1]));
+    close(pcp[1]);
+    exit(2);
+  } else if (strcmp(arguments[0], "exit") == 0) {
+    exit(3);
+  } 
+  else {
+    /*
+      Pipe command: fork twice. Execute the left hand side directly.
+      Call run_command recursion for the right side of the pipe.
+    */
+    if (pipe_cmd) {
+      // ##### Place your code here.
       /* Get next address to RHS of pipe */
       int j = i + 1;
       while(j < nbuf && strin(buf[j], " \t<|>;\n") == 1) {
@@ -161,220 +384,26 @@ void run_command(char* buf, int nbuf, int* pcp) {
 
         run_command(&buf[j], nbuf - j, pcp);
       }
-      exit(1);
-    }
-    /* Start a word */
-    if (ws && strin(buf[i], " \t>|<") == 0) {
-      if (buf[i] )
-      numargs++;
-      arguments[numargs - 1] = &buf[i];
-      we = 1;
-      ws = 0;
-    } 
-
-    /* End a word */
-    if (we == 1 && buf[i] == 32 && buf[i] != 60 && buf[i] != 62) {
-      buf[i] = '\0';
-      ws = 1;
-      we = 0;
-    }
-    
-    
-
-    if (!(redirection_left || redirection_right)) {
-      /* No redirection, continue parsing command. */
-      if (buf[i] == '<') {
-        redirection_left = 1;
-        if (we) {
-          buf[i] = '\0';
-          we = 0;
-          ws = 1;
-        } 
-        if (numargs == 0)  {
-          fprintf(2, "my_shell: missing file for redirection\n");
-          exit(0);
-        }
-        continue;
-      }
-
-      if (buf[i] == '>') {
-        redirection_right = 1;
-        if (we) {
-          buf[i] = '\0'; 
-          we = 0;
-          ws = 1;
-        }
-        if (numargs == 0)  {
-          fprintf(2, "my_shell: missing file for redirection\n");
-          exit(0);
-        }
-        continue;
-      }
-    } 
-    else {
-      if (numargs == 0) {
-        fprintf(2, "my_shell: misuse of redirection token\n"); 
+    } else {
+      // ##### Place your code here.
+      int pid = fork();
+      if (pid > 0) {
+        close(pcp[0]);
+        close(pcp[1]);
+        pid = wait((int*)0);
+      } else if (pid == 0) {
+        close(pcp[0]);
+        close(pcp[1]);
+        if (redirection_left || redirection_right) {}
+        exec(arguments[0], arguments);
+        fprintf(2, "exec failed: %s\n", arguments[0]);
         exit(0);
-      }
-      
-      /* Redirection command. Capture the file names. */
-      /* TODO: make sure it is not an argument below */
-      if (redirection_left && file_name_l == 0) {
-        int j = i;
-        while (strin(buf[j], " \t><|;\n") == 1)
-        {
-          if (strin(buf[j], "><|;\n") == 1) {
-            fprintf(2, "my_shell: invalid use of redirection token\n");
-            exit(1);
-          }
-          j++;
-        }
-        file_name_l = &buf[j];
-        // printf("file_name_l: %s", file_name_l);
-        
-      } else if (redirection_right && file_name_r == 0) {
-        int j = i;
-        while (strin(buf[j], " \t><|;\n") == 1)
-        {
-          if (strin(buf[j], "><|;\n") == 1) {
-            fprintf(2, "my_shell: invalid use of redirection token\n");
-            exit(1);
-          }
-          j++;
-        }
-        file_name_r = &buf[j];
-        // Fix errors with: `ls; echo hello > output; ls`, where file_name_r = `output; ls`
-        printf("file_name_r: %s\n", file_name_r);        
       } else {
-        if (buf[i] == ' ' || buf[i] == '\n') {
-          buf[i] = '\0';
-        } // TODO: Review
-      }
+        fprintf(2, "my_shell: run_command internal fork error\n");
+      } 
     }
   }
 
-
-  /*
-    Sequence command. Continue this command in a new process.
-    Wait for it to complete and execute the command following ';'.
-  */
-  if (sequence_cmd) {
-    sequence_cmd = 0;
-    // TODO: Add cd
-
-    int pid = fork();
-    if (pid < 0) {
-      fprintf(2, "my_shell: fork failed\n");
-      exit(1);
-    } else if (pid == 0) {
-      /* child cat  */
-      run_command(buf, nbuf, pcp);
-    } else {
-      wait(0);
-      // printf("sequence returned\n");
-      // printf("running: {%s}", sequence_pointer);
-      run_command(sequence_pointer, nbuf - (sequence_pointer - buf), pcp);
-    }
-  }
-
-  
-  /* If this command is a CD command, write the arguments to the pcp pipe 
-   * and exit with '2' to tell the parent process about this. */
-  if (strcmp(arguments[0], "cd") == 0) {
-    // ##### Place your code here.
-    if (numargs > 2) {
-      fprintf(2, "-my_shell: cd: too many arguments\n");
-      exit(0);
-    }
-    if (numargs == 1) {
-      exit(0);
-    }
-    // Rule: Close before and after write
-    close(pcp[0]);
-    write(pcp[1], arguments[1], strlen(arguments[1]));
-    close(pcp[1]);
-    exit(2);
-  } else if (strcmp(arguments[0], "exit") == 0) {
-    exit(3);
-  } 
-  else {
-    /*
-      Pipe command: fork twice. Execute the left hand side directly.
-      Call run_command recursion for the right side of the pipe.
-    */
-    
-  }
-
-  /*
-    If this is a redirection command,
-    tie the specified files to std in/out.
-  */
-  if (redirection_left) {
-    int redir_fd = open(file_name_l, O_RDONLY);
-    // printf("rl_fd: %d\n", redir_fd);
-    if (redir_fd < 0) {
-        fprintf(2, "my_shell: cannot open %s\n", file_name_l);
-        exit(1);
-    }
-    close(0);
-    if (dup(redir_fd) < 0) {
-      fprintf(2, "redirection dup error\n");
-      close(redir_fd);
-      exit(1);
-    }
-    close(redir_fd);
-    /* Execute command without last argument (redir_file_name) */
-    remove_last_argument(arguments, &numargs);
-    exec(arguments[0], arguments);
-    fprintf(2, "exec failed: %s\n", arguments[0]);
-    exit(1);
-  }
-  if (redirection_right) {
-    int redir_fd = open(file_name_r, O_CREATE | O_TRUNC | O_WRONLY);
-    // printf("fd: %d\n", redir_fd);
-    if(redir_fd < 0) {
-        fprintf(2, "my_shell: cannot open %s\n", file_name_r);
-        exit(1);
-    }
-    close(1);
-    dup(redir_fd);
-    close(redir_fd);
-    /* Execute command without last arg (redir_file_name) */
-    remove_last_argument(arguments, &numargs);
-    exec(arguments[0], arguments);
-    fprintf(2, "exec failed %s\n", arguments[0]);
-    exit(1);
-  }
-  
-  /* Parsing done. Execute the command. */
-  if (!pipe_cmd) {
-    int pid = fork();
-    if (pid > 0) {
-      close(pcp[0]);
-      close(pcp[1]);
-      pid = wait((int*)0);
-    } else if (pid == 0) {
-      close(pcp[0]);
-      close(pcp[1]);
-      if (redirection_left || redirection_right) {}
-      exec(arguments[0], arguments);
-      fprintf(2, "exec failed: %s\n", arguments[0]);
-      exit(0);
-    } else {
-      fprintf(2, "my_shell: run_command internal fork error\n");
-    } 
-  }
-
-  /* Testing */
-  printf("\nNum of args: %d\n", numargs);
-  for (int i = 0; i < numargs; i++)
-  {
-    printf("arguments[%d]: %s\n", i, arguments[i]);
-  }
-  // printf("redir_l: %d\n", redirection_left);
-  // printf("redir_r: %d\n", redirection_right);
-  // printf("file_l: %s\n", file_name_l);
-  // printf("file_r: %s\n", file_name_r);
   exit(0);
 }
 
