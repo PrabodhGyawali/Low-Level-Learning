@@ -8,14 +8,21 @@ SECTION .data
 	formatin: db "%lld", 0
 	formatout: db "%lld", 10, 0
 	formatc: db " %c", 0
+	valid_ops: db "+-*/|&", 0
+
 	; Error messages
 	err_divide: db "Divide by 0 error!", 10, 0
+	err_op: db "<operator> invalid: use operator in {+, -, *, /, %, &, |}", 10, 0 
+	err_overflow: db "Arithmetic overflow occured!", 10, 0
+	err_input: db "Invalid input! Please enter valid numbers", 10, 0
 
 SECTION .bss
 	buffer resb 2
 	integer1 resq 1
 	integer2 resq 1
 	operator resb 1
+	; Error codes
+	error_code resb 1
 
 SECTION .text
 	global main
@@ -57,48 +64,69 @@ main:
 	xor rax, rax
 	call scanf
 
-	movzx rax, byte [operator]
+	movzx rax, byte [operator]	; (move with zero extension) byte to AL
 
 	cmp al, '+'
-	je addition
+	je op_add
 	cmp al, '-'
-	je subtraction
+	je op_sub
 	cmp al, '*'
-	je multiplication
+	je op_mult
 	cmp al, '/'
-	je division
-	jmp end
+	je op_div
+	cmp al, '%'
+	je op_mod
+	cmp al, '&'
+	jmp op_and
+	cmp al, '|'
+	jmp op_or
+	; Operator Err
+	jmp err_op_routine
 	
-addition:
+op_add:
 	mov rax, [integer1]
 	add rax, [integer2]
 	jmp print_result
 
-subtraction:
+op_sub:
 	mov rax, [integer1]
 	sub rax, [integer2]
 	jmp print_result
 
-multiplication:
+op_mult:
 	mov rax, [integer1]
 	imul qword [integer2]
 	jmp print_result
 
-division:
+op_div:
 	mov rax, [integer1]
 	cmp qword [integer2], 0
-	je divide_error
+	je err_divide_routine
 	
 	xor rdx, rdx
 	mov rax,[integer1]
 	idiv qword [integer2]
 	jmp print_result
-
-divide_error:
+op_mod:
+op_and:
+op_or:
+	mov rdi, err_op
+	xor rax, rax
+	call printf
+	jmp end
+; ERRORS
+err_divide_routine:
 	mov rdi, err_divide
 	xor rax, rax
 	call printf
 	jmp end
+
+err_op_routine:
+	mov rdi, err_op
+	xor rax, rax
+	call printf
+	jmp end
+
 print_result:
 	mov rdi, result_msg
 	mov rsi, rax
