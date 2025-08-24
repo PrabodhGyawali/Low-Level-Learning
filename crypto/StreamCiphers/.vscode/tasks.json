@@ -1,0 +1,27 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "cppbuild",
+      "label": "make build",
+      "command": "make",  
+      "args": [
+        "build"
+      ],
+      "problemMatcher": ["$gcc"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "detail": "Project build with makefile"
+    },
+    {
+        "label": "make clean",
+        "command": "make",
+        "args": ["clean"],
+        "group": "build",
+        "problemMatcher": ["$gcc"],
+        "detail": "Clean build artifacts"
+    }
+  ]
+}

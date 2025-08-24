@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug test (LLDB)",
+      "type": "lldb",  
+      "request": "launch",
+      "program": "${workspaceFolder}/trivium_test",
+      "args": [],  
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "stopAtEntry": false,
+      "preLaunchTask": "make build" 
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+    "configurations": [
+        {
+            "name": "Mac GCC",
+            "includePath": [
+                "${workspaceFolder}/include",
+                "${workspaceFolder}"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/local/bin/gcc-15", // FIXME: Change to your gcc path
+            "cStandard": "c11",
+            "intelliSenseMode": "macos-gcc-x64",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/include",
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        }
+    ],
+    "version": 4
+}
