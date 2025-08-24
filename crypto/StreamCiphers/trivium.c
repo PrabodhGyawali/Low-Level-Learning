@@ -49,11 +49,11 @@ void trivium_init(TriviumContext* ctx, const uint8_t* key, const uint8_t* iv) {
 			(ctx->rc[108] & ctx->rc[109]);
 		
 		// Shift each register
-		for (int j = RA_SIZE - 1; j > 0; j++)
+		for (int j = RA_SIZE - 1; j > 0; j--)
 			ctx->ra[j] = ctx->ra[j - 1];
-		for (int j = RB_SIZE - 1; j > 0; j++)
+		for (int j = RB_SIZE - 1; j > 0; j--)
 			ctx->rb[j] = ctx->rb[j - 1];
-		for (int j = RC_SIZE - 1; j > 0; j++)
+		for (int j = RC_SIZE - 1; j > 0; j--)
 			ctx->rc[j] = ctx->rc[j - 1];
 
 		// Set start registers
@@ -77,11 +77,11 @@ int trivium_generate_bit(TriviumContext* ctx) {
 		(ctx->rc[108] & ctx->rc[109]);
 	
 	// Shift each register 
-	for (int j = RA_SIZE - 1; j > 0; j++)
+	for (int j = RA_SIZE - 1; j > 0; j--)
 		ctx->ra[j] = ctx->ra[j - 1];
-	for (int j = RB_SIZE - 1; j > 0; j++)
+	for (int j = RB_SIZE - 1; j > 0; j--)
 		ctx->rb[j] = ctx->rb[j - 1];
-	for (int j = RC_SIZE - 1; j > 0; j++)
+	for (int j = RC_SIZE - 1; j > 0; j--)
 		ctx->rc[j] = ctx->rc[j - 1];
 	
 	// Set start registers
