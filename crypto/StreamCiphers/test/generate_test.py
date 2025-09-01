@@ -13,7 +13,6 @@ vectors = []
 
 lines = data.splitlines()
 
-
 i = 0
 
 while i < len(lines):
@@ -32,7 +31,7 @@ while i < len(lines):
                 range_str = line.split('stream[')[1].split(']')[0]
                 hex_part = line.split('=')[1].strip()
                 i += 1
-                while i < len(lines) and lines[i].startswith(' ' * 20):  # Adjust based on indentation, approx 31 spaces
+                while i < len(lines) and lines[i].startswith(' ' * 31):  # Corrected to 31 spaces
                     hex_part += lines[i].strip()
                     i += 1
                 i -= 1
@@ -40,7 +39,7 @@ while i < len(lines):
             elif line.startswith('xor-digest ='):
                 hex_part = line.split('=')[1].strip()
                 i += 1
-                while i < len(lines) and lines[i].startswith(' ' * 20):
+                while i < len(lines) and lines[i].startswith(' ' * 31):
                     hex_part += lines[i].strip()
                     i += 1
                 i -= 1
@@ -56,64 +55,73 @@ def generate_tests(vectors):
     print('#include "../include/trivium.h"')
     print('#include <stdio.h>')
     print('#include <string.h>')
+    print('#include <stdlib.h>')  # Added for malloc/free
     print('/**')
     print(' * Test cases obtained using')
     print(' * https://github.com/cantora/avr-crypto-lib/blob/master/testvectors/trivium-80.80.test-vectors')
     print(' */')
-    print('int main(void) {')
-    print('    int overall_pass = 1;')
-
+    print('int overall_pass;')  # Global for access in test functions
+    
     test_num = 1
     for vec in vectors:
-        print('    {')
+        print(f'void run_test_{test_num}(void) {{')
         key_bytes = int(vec["key"], 16).to_bytes(10, "big")
-        print('        uint8_t key[TRIVIUM_KEY_SIZE] = {')
-        print('            ' + ', '.join([f'0x{byte:02X}' for byte in key_bytes]) + '')
-        print('        };')
+        print('    uint8_t key[TRIVIUM_KEY_SIZE] = {')
+        print('        ' + ', '.join([f'0x{byte:02X}' for byte in key_bytes]) + '')
+        print('    };')
         iv_bytes = int(vec["iv"], 16).to_bytes(10, "big")
-        print('        uint8_t iv[TRIVIUM_IV_SIZE] = {')
-        print('            ' + ', '.join([f'0x{byte:02X}' for byte in iv_bytes]) + '')
-        print('        };')
-        print('        uint8_t plaintext[512] = {0};')
-        print('        uint8_t ciphertext[512] = {0};')
-        print('        TriviumContext ctx;')
-        print('        trivium_init(&ctx, key, iv);')
-        print('        trivium_encrypt(&ctx, plaintext, ciphertext, 512);')
-        print('        int pass = 1;')
+        print('    uint8_t iv[TRIVIUM_IV_SIZE] = {')
+        print('        ' + ', '.join([f'0x{byte:02X}' for byte in iv_bytes]) + '')
+        print('    };')
+        print('    uint8_t *plaintext = calloc(512, sizeof(uint8_t));')  # Heap allocation
+        print('    uint8_t *ciphertext = malloc(512 * sizeof(uint8_t));')
+        print('    if (!plaintext || !ciphertext) {')
+        print('        printf("Memory allocation failed\\n");')
+        print('        overall_pass = 0;')
+        print('        return;')
+        print('    }')
+        print('    TriviumContext ctx;')
+        print('    trivium_init(&ctx, key, iv);')
+        print('    trivium_encrypt(&ctx, plaintext, ciphertext, 512);')
+        print('    int pass = 1;')
         for range_str, hex_str in vec['streams'].items():
             start, end = range_str.split('..')
             start = int(start); end = int(end)
             size = 64
             stream_bytes = bytes.fromhex(hex_str)
             var_name = f'expected_{start}_{end}'
-            print(f'        uint8_t {var_name}[{size}] = {{')
+            print(f'    static const uint8_t {var_name}[{size}] = {{')  # Static const to avoid stack
             for j in range(0, len(stream_bytes), 16):
                 chunk = stream_bytes[j:j+16]
-                print('            ' + ', '.join([f'0x{byte:02X}' for byte in chunk]) + ',')
-            print('        };')
-            print(f'        if (memcmp(ciphertext + {start}, {var_name}, {64}) != 0) {{ pass = 0; }}')
-        print('        uint8_t computed_digest[64] = {0};')
-        print('        for (int b = 0; b < 8; b++) {')
-        print('            for (int j = 0; j < 64; j++) {')
-        print('                computed_digest[j] ^= ciphertext[b * 64 + j];')
-        print('            }')
-        print('        }')
-        digest_bytes = bytes.fromhex(vec['xor_digest'])
-        print('        uint8_t expected_digest[64] = {')
-        for j in range(0, len(digest_bytes), 16):
-            chunk = digest_bytes[j:j+16]
-            print('            ' + ', '.join([f'0x{byte:02X}' for byte in chunk]) + ',')
-        print('        };')
-        print('        if (memcmp(computed_digest, expected_digest, 64) != 0) { pass = 0; }')
-        print('        if (pass) {')
-        print(f'            printf("Test {test_num}: PASS\\n");')
-        print('        } else {')
-        print(f'            printf("Test {test_num}: FAIL\\n");')
-        print('            overall_pass = 0;')
+                print('        ' + ', '.join([f'0x{byte:02X}' for byte in chunk]) + ',')
+            print('    };')
+            print(f'    if (memcmp(ciphertext + {start}, {var_name}, {64}) != 0) {{ pass = 0; }}')
+        print('    uint8_t computed_digest[64] = {0};')
+        print('    for (int b = 0; b < 8; b++) {')
+        print('        for (int j = 0; j < 64; j++) {')
+        print('            computed_digest[j] ^= ciphertext[b * 64 + j];')
         print('        }')
         print('    }')
+        digest_bytes = bytes.fromhex(vec['xor_digest'])
+        print('    static const uint8_t expected_digest[64] = {')
+        for j in range(0, len(digest_bytes), 16):
+            chunk = digest_bytes[j:j+16]
+            print('        ' + ', '.join([f'0x{byte:02X}' for byte in chunk]) + ',')
+        print('    };')
+        print('    if (memcmp(computed_digest, expected_digest, 64) != 0) { pass = 0; }')
+        print(f'    if (pass) {{ printf("Test {test_num}: PASS\\n"); }} else {{')
+        print(f'        printf("Test {test_num}: FAIL\\n");')
+        print('        overall_pass = 0;')
+        print('    }')
+        print('    free(plaintext);')
+        print('    free(ciphertext);')
+        print('}')
         test_num += 1
 
+    print('int main(void) {')
+    print('    overall_pass = 1;')
+    for i in range(1, len(vectors) + 1):
+        print(f'    run_test_{i}();')
     print('    return overall_pass ? 0 : 1;')
     print('}')
 
