@@ -20,3 +20,4 @@ user/usys.S
 bin/
 *.log
 Gemfile.lock
+test_*.txt
