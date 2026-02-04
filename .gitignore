@@ -14,3 +14,9 @@ mkfs
 kernel/kernel
 user/usys.S
 .gdbinit
+
+# Ruby/RSpec artifacts
+.bundle/
+bin/
+*.log
+Gemfile.lock

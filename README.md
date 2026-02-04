@@ -19,6 +19,13 @@ Status: 25/25 marks passing all test cases
 	- Status: Incomplete
 
 
+### Database Systems
+- **SQLite from Scratch**
+	- Custom SQLite database implementation in C
+	- Features: Table operations, row insertion/retrieval, error handling
+	- Testing: RSpec test suite for database functionality
+	- To run tests: `cd db/sqlite_from_scratch && bundle install && rspec`
+
 ### Assembly (AMD64)
 - **x86_64 Assembly Projects (In Progress)**
  - Learning AMD64 in nasm through Project-base approach
@@ -38,6 +45,8 @@ Status: 25/25 marks passing all test cases
 ## Repository Structure
 ```
 .
+├── db/
+│   └── sqlite_from_scratch/
 ├── os/
 │   ├── xv6-shell/
 │   └── lc3-vm/
