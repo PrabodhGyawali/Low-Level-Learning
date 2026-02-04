@@ -20,4 +20,8 @@ user/usys.S
 bin/
 *.log
 Gemfile.lock
-test_*.txt
+
+# SQLite from scratch artifacts
+db/sqlite_from_scratch/db
+db/sqlite_from_scratch/debug_scripts/*.gdb
+db/sqlite_from_scratch/test_input/*.txt
