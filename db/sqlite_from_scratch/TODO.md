@@ -1,0 +1,2 @@
+- add db tests using rspec
+- fix bugs with string length & use strtok instead of sscanf
