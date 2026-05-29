@@ -22,26 +22,30 @@ def modular_inverse(a, n):
             if (a*i) % n == 1:
                 return i
 
-def chinese_remainder_theorem(*n):
+def chinese_remainder(remainders, moduli):
     # pairwise coprimality check
-    for i in range(len(n)):
-        for j in range(len(n)):
+
+    k = len(moduli)
+    for i in range(k):
+        for j in range(k):
             if (i!=j):
-                d = gcd(n[i], n[j])
+                d = gcd(moduli[i], moduli[j])
                 if d != 1:
                     return None
 
     z = 0
-    prod_n = 1
+    N = 1
+    
+    for m in moduli:
+        N *= m
 
-    for i in range(len(n)):
-        prod_n *= n[i]
+    for i in range(k):
+        ni = moduli[i]
+        ai = remainders[i]
+        Mi = N / ni
+        wi = modular_inverse(Mi, ni)
+        z += wi * Mi * ai
 
-    for i in range(len(n)):
-        n_i = prod_n / n[i]
-        m = modular_inverse(n_i, n[i])
-        z += m * n_i
-
-    return z
+    return z % N
                 
     
